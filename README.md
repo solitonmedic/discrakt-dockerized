@@ -1,39 +1,42 @@
 # Discrakt Docker sidecar
 
-Run [Discrakt](https://github.com/afonsojramos/discrakt) in a separate headless
-container alongside an existing Linux Discord desktop client. It mirrors Trakt,
-Plex, or Jellyfin watch activity to Discord Rich Presence, including artwork
-and estimated playback progress.
+Run [Discrakt](https://github.com/afonsojramos/discrakt) in its own container,
+without a display or system tray. It sends your Trakt, Plex, or Jellyfin watch
+activity to Discord Rich Presence, with artwork and estimated playback progress.
 
-This is an unofficial Docker adaptation of Afonso Ramos's MIT-licensed project,
-based on upstream commit `87c66612a6eaf7438b0b9b479e623bdded0a85da`.
-The complete source is included. See [changes](CHANGES.md),
-[upstream documentation](README.upstream.md), and [license](LICENSE).
+Discrakt connects to your Linux Discord desktop client through its IPC socket.
+You can keep using your existing Discord image.
+
+This is an unofficial Docker adaptation of Afonso Ramos's MIT-licensed project.
+It includes the full source, based on upstream commit
+`87c66612a6eaf7438b0b9b479e623bdded0a85da`. See [CHANGES.md](CHANGES.md) for the
+Docker changes, [README.upstream.md](README.upstream.md) for the original
+documentation, and [LICENSE](LICENSE) for the license.
 
 ## Requirements
 
 - Docker Engine on Linux with Docker Compose v2, or a compatible Linux container engine.
-- A running, logged-in **Linux Discord desktop client** with its Rich Presence
-  Unix socket available to the container. A Discord browser tab is insufficient.
-- Access to Trakt, Plex, or Jellyfin, connected through the setup wizard.
+- A running Linux Discord desktop client, logged in, with its IPC socket
+  available to the Discrakt container. The browser version of Discord won't work.
+- A Trakt, Plex, or Jellyfin account to connect through the setup wizard.
 
-Images can be built for `linux/amd64` and `linux/arm64`. Mac and Windows users
-can build images, but their native Discord application's socket or named pipe
-is not automatically available inside Docker Desktop's Linux VM. Run the
-Discord Linux client in that same Docker environment, or deploy on Linux.
+You can build images for `linux/amd64` and `linux/arm64`, including from macOS or
+Windows. Docker Desktop runs containers in a Linux VM, so it can't automatically
+use your Mac Discord socket or Windows named pipe. Run the Linux Discord client
+in the same Docker environment, or deploy both on Linux.
 
 ## Quick start: Discord already runs in Docker
 
-Use the existing Docker volume that contains the Discord IPC socket. It must
-already be mounted in the Discord container, usually at `/tmp`. Creating an
-empty volume alone does not connect it to Discord.
+Find the Docker volume that holds Discord's IPC socket. Discord must already
+have that volume mounted, usually at `/tmp`. An empty volume won't connect the
+two containers.
 
 ```sh
 cp .env.example .env
 ```
 
-Edit `.env`: set `DISCORD_IPC_VOLUME` to that volume's name, and match
-`DISCRAKT_UID`/`DISCRAKT_GID` to the socket owner. Then run:
+In `.env`, set `DISCORD_IPC_VOLUME` to the volume's name. Set `DISCRAKT_UID` and
+`DISCRAKT_GID` to the socket owner's user and group IDs. Then run:
 
 ```sh
 docker compose config --quiet
@@ -41,25 +44,24 @@ docker compose build
 docker compose up -d --no-build
 ```
 
-Open **http://127.0.0.1:18081/index.html**, select a source, authorize it directly
-with the provider, and finish the wizard. The setup server then closes and
-Discrakt continues polling in the background. The provider credentials persist
-in the project's configuration volume.
+Open http://127.0.0.1:18081/index.html, choose your source, authorize it with the
+provider, and finish the wizard. The setup server closes when you're done.
+Discrakt keeps checking for watch activity in the background and saves your
+credentials in its settings volume.
 
-The Compose project is named `discrakt-docker`. It manages its own service,
-network, and settings volume. It uses your existing Discord IPC volume without
-managing the Discord container or requiring a custom Discord image.
+The Compose project is named `discrakt-docker`. It creates its own service,
+network, and settings volume, and mounts the existing Discord IPC volume.
 
 ## Alternative: native Discord on the Linux host
 
-Locate the actual socket directory on the Linux host:
+Find the socket on the Linux host:
 
 ```sh
 find /run/user/"$(id -u)" /tmp -maxdepth 2 -type s -name 'discord-ipc-[0-9]' 2>/dev/null
 ```
 
-Set `DISCORD_IPC_DIR` in `.env` to the **directory** containing the socket, and
-match the UID/GID. Use the standalone host Compose file:
+Set `DISCORD_IPC_DIR` in `.env` to the directory containing the socket. Match
+`DISCRAKT_UID` and `DISCRAKT_GID` to its owner, then use `compose.host.yaml`:
 
 ```sh
 docker compose -f compose.host.yaml config --quiet
@@ -67,56 +69,60 @@ docker compose -f compose.host.yaml build
 docker compose -f compose.host.yaml up -d --no-build
 ```
 
-Keep using `-f compose.host.yaml` for management commands with this option.
-Do not combine the two Compose files. A directory mount follows a replacement
-socket after Discord restarts; mounting a single socket file can retain an old
-inode. The IPC directory is mounted read-only, including its other contents.
-No Discord home directory, display, session D-Bus, or Docker daemon socket is
-mounted into Discrakt.
+Keep `-f compose.host.yaml` in subsequent management commands. Use this file on
+its own; don't combine it with `compose.yaml`.
+
+Mount the directory so Discrakt can find the replacement socket when Discord
+restarts. Mounting the socket file itself can leave it pointing to the old
+socket. The directory is mounted read-only, but Discrakt can read its other
+contents too. The Compose files share only the IPC directory with the Discord client.
 
 ## Remote setup and private VPN access
 
-The setup wizard has no authentication of its own. It defaults to loopback.
-For SSH access, forward the setup port from your computer:
+The setup wizard has no login of its own. Compose binds its port to
+`127.0.0.1` by default. To reach it over SSH, run this on your computer:
 
 ```sh
 ssh -N -L 127.0.0.1:18081:127.0.0.1:18081 YOUR_LINUX_HOST
 ```
 
-Then open http://127.0.0.1:18081/index.html locally. For direct private VPN
-access, set `DISCRAKT_BIND_ADDRESS` to the Linux host's own VPN interface
-address before starting Compose. Keep this endpoint off public interfaces.
+Then open http://127.0.0.1:18081/index.html on that computer.
 
-If you change the bind address or setup port, apply it with `docker compose up
--d --no-build`. The settings volume is retained.
+For direct access through a private VPN, set `DISCRAKT_BIND_ADDRESS` to the
+Linux host's VPN interface address before starting Compose. Open
+`http://VPN_ADDRESS:18081/index.html` while connected to the VPN. Keep the setup
+port off public interfaces.
+
+After changing the bind address or setup port, run
+`docker compose up -d --no-build` to apply it. This keeps your settings volume.
 
 ## Build details and checks
 
-The Dockerfile uses a native build stage and cross compilers for the requested
-image architecture. It avoids running the Rust compiler under CPU emulation.
-Examples using Docker Buildx:
+The Dockerfile compiles Rust on the builder's native CPU and uses a cross
+compiler when the image targets another architecture. With Docker Buildx:
 
 ```sh
 docker buildx build --platform linux/amd64 --load -t discrakt-sidecar:amd64 .
 docker buildx build --platform linux/arm64 --load -t discrakt-sidecar:arm64 .
 ```
 
-Podman can also build with `podman build --platform linux/amd64 ...`. Cross
-builds need target-platform emulation for the runtime verification stage;
-Docker Desktop normally supplies it. Native builds need no emulation.
+You can also use Podman, for example `podman build --platform linux/amd64 ...`.
+Building for another CPU architecture requires emulation to run the binary
+checks. Docker Desktop normally supplies it. Native builds don't need emulation.
 
-Every complete image build checks resolved React/React DOM versions, builds the
-frontend, checks Rust formatting, runs the upstream library/integration tests,
-and exercises the real target binary against local HTTP and Discord IPC mocks.
-Tests use dummy source configuration and never contact your real Discord or
-media accounts. Build and test tools stay outside the final image.
+Each complete image build checks that React and React DOM match, builds the
+setup page, checks Rust formatting, and runs the upstream library and integration
+tests. It also runs the target binary against local HTTP and Discord IPC mocks.
+These checks use dummy settings and don't contact your Discord or media
+accounts. The final image excludes the build and test tools.
 
-The runtime uses an unprivileged user, a read-only root, dropped capabilities,
-bounded resources/logs, a writable settings volume, and Docker init. Defaults
-are UID/GID 1000; changing those values also requires rebuilding the image.
-Do not change IDs on an existing settings volume without addressing ownership.
+The image runs as an unprivileged user. Compose makes the root filesystem
+read-only, drops Linux capabilities, limits resources and log size, and enables
+Docker init. Settings stay in a writable volume. The default UID and GID are
+1000; rebuild the image if you change them, and check ownership before reusing
+an existing settings volume.
 
-See [validation notes](VALIDATION.md) for the checks completed for this repository.
+See [VALIDATION.md](VALIDATION.md) for the completed checks and their limits.
 
 ## Management and troubleshooting
 
@@ -127,25 +133,30 @@ docker compose restart discrakt
 docker compose down
 ```
 
-`down` retains the settings volume; `down --volumes` deletes it. Credentials are
-stored at `/config/discrakt/credentials.ini` and should never be committed or
-included in a public issue. `.gitignore` and `.dockerignore` exclude local
-configuration, credential backups, logs, and transfer archives.
+`down` keeps the settings volume. `down --volumes` deletes it, including your
+saved credentials. Credentials live at `/config/discrakt/credentials.ini`.
+Keep that file out of commits and public issues. The ignore files exclude local
+settings, credential backups, logs, and transfer archives.
 
-- **Cannot connect to Discord:** confirm the client is logged in, the real IPC
-  directory/volume is mounted, and socket permissions allow the configured UID.
-  Sharing a Docker network alone does not share a Unix socket.
-- **Setup port closes after authorization:** expected; it is an initial setup
-  wizard, not a permanent dashboard.
-- **Blank setup page:** React and React DOM are pinned to the same exact version;
-  the build rejects a mismatch. Reload the page after changing images.
-- **Progress changes backward:** the Trakt path calculates estimated progress
-  from watch timestamps. It can reflect timing updates but does not log explicit
-  player seek events.
+- Cannot connect to Discord: check that Discord is logged in, the IPC directory
+  or volume contains its socket, and the configured UID has permission to use it.
+  Putting both containers on the same Docker network won't share the socket.
+- Setup port closes after authorization: this is expected. Discrakt closes the
+  server after you finish setup.
+- Blank setup page: React and React DOM are pinned to the same version, and the
+  build rejects a mismatch. Reload the page after changing images.
+- Progress moves backward: Discrakt estimates Trakt progress from watch
+  timestamps. Updates to those timestamps can change the estimate. The logs
+  don't record explicit player seek events.
 
 ## Sharing this fork
 
-The branch contains the upstream source and the Docker changes. Configure your
-own Git hosting remote when publishing it; the `upstream` remote points to the
-original project. A source ZIP needs no Git installation. A Git bundle preserves
-the commit history and can be cloned with `git clone PATH_TO_BUNDLE`.
+The branch includes the upstream source and Docker changes. Set up your own
+remote before publishing; `upstream` points to the original project.
+
+Use the source ZIP if you don't need Git history. To get the history from a Git
+bundle, run:
+
+```sh
+git clone PATH_TO_BUNDLE discrakt-docker
+```
