@@ -26,6 +26,9 @@ Base commit: `87c66612a6eaf7438b0b9b479e623bdded0a85da`.
   `compose.host.yaml` for the native Linux client's IPC directory.
 - `.env.example`, source/build ignore rules, this README, and preserved upstream
   documentation and MIT license.
+- A GitHub Actions workflow publishes AMD64 and ARM64 images to GHCR using
+  `GITHUB_TOKEN`. Compose defaults to that image; local builds remain available
+  for custom UID/GID settings. Image labels identify this fork and its upstream.
 
 This repository contains generic examples. Deployment-specific hostnames,
 addresses, account state, logs, backups, screenshots, and image archives from

@@ -2,7 +2,7 @@ name: discrakt-docker
 
 services:
   discrakt:
-    image: ${DISCRAKT_IMAGE:-discrakt-sidecar:local}
+    image: ${DISCRAKT_IMAGE:-ghcr.io/solitonmedic/discrakt-dockerized:latest}
     build:
       context: .
       args:

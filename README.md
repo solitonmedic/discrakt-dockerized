@@ -21,8 +21,9 @@ documentation, and [LICENSE](LICENSE) for the license.
   access. The browser version of Discord doesn't provide that socket.
 - A Trakt, Plex, or Jellyfin account to connect through the setup wizard.
 
-Images support `linux/amd64` and `linux/arm64`. You can build them from macOS or
-Windows, but Docker Desktop's Linux VM can't automatically use your native Mac
+The image `ghcr.io/solitonmedic/discrakt-dockerized:latest` supports `linux/amd64`
+and `linux/arm64`. Docker selects the architecture for your host. Docker
+Desktop's Linux VM can't automatically use your native Mac
 Discord socket or Windows named pipe. These examples require a Linux Discord
 client and access to its socket from the container.
 
@@ -40,8 +41,10 @@ cp .env.example .env
 | A Docker volume shared with Discord | `compose.yaml` | `DISCORD_IPC_VOLUME` |
 
 Both files run the same Discrakt image. Each is a complete example; use one at
-a time. Set `DISCRAKT_UID` and `DISCRAKT_GID` to the socket owner's user and group
-IDs. The defaults are examples, so check them against your own installation.
+a time. The published image runs as UID/GID 1000. Check the socket owner's IDs
+before starting. If they differ, follow [Build from source](#build-from-source)
+to build an image with matching IDs. Changing the values in `.env` alone does
+not change the user inside a prebuilt image.
 
 ### Discord installed on the Linux host
 
@@ -56,7 +59,7 @@ Set `DISCORD_IPC_DIR` to the directory containing the socket. The sample path
 
 ```sh
 docker compose -f compose.host.yaml config --quiet
-docker compose -f compose.host.yaml build
+docker compose -f compose.host.yaml pull
 docker compose -f compose.host.yaml up -d --no-build
 ```
 
@@ -74,7 +77,7 @@ Set `DISCORD_IPC_VOLUME` to that volume's name, then run:
 
 ```sh
 docker compose -f compose.yaml config --quiet
-docker compose -f compose.yaml build
+docker compose -f compose.yaml pull
 docker compose -f compose.yaml up -d --no-build
 ```
 
@@ -93,7 +96,20 @@ authorize it with the provider, and finish the wizard. The setup server closes
 when you're done. Discrakt keeps checking for watch activity in the background
 and saves your credentials in its settings volume.
 
-## Build details
+## Build from source
+
+To build locally, set `DISCRAKT_IMAGE=discrakt-sidecar:local` in `.env`. Set
+`DISCRAKT_UID` and `DISCRAKT_GID` to the IDs that need access to Discord's socket.
+Then build and start with the Compose file you chose. For the host-directory
+example:
+
+```sh
+docker compose -f compose.host.yaml build
+docker compose -f compose.host.yaml up -d --no-build
+```
+
+For the shared-volume example, use `-f compose.yaml` instead. Skip the `pull`
+step when using your locally built image.
 
 The Dockerfile compiles Rust on the builder's native CPU and uses a cross
 compiler when the image targets another architecture. With Docker Buildx:
@@ -120,6 +136,18 @@ Docker init. Settings stay in a writable volume. The default UID and GID are
 an existing settings volume.
 
 See [VALIDATION.md](VALIDATION.md) for the completed checks and their limits.
+
+## Published images
+
+The [container workflow](.github/workflows/container.yml) publishes to
+[GHCR](https://github.com/solitonmedic/discrakt-dockerized/pkgs/container/discrakt-dockerized)
+when image source files change on `main`, or when run manually from that branch.
+`latest` follows successful builds from `main`. Each build also gets a
+`sha-<full-commit-id>` tag so you can select a specific source revision.
+
+Pushing a tag such as `docker-v1.0.0` publishes the image tag `1.0.0`. These
+Docker release tags are separate from upstream Discrakt's release tags.
+Tag builds leave `latest` unchanged.
 
 ## Management and troubleshooting
 

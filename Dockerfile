@@ -51,7 +51,8 @@ RUN test "$DISCRAKT_UID" -gt 0 && test "$DISCRAKT_GID" -gt 0 \
     && useradd --non-unique --uid "$DISCRAKT_UID" --gid "$DISCRAKT_GID" --no-create-home --home-dir /config discrakt \
     && install -d -o "$DISCRAKT_UID" -g "$DISCRAKT_GID" -m 0700 /config /config/discrakt
 COPY --from=build /out/discrakt /usr/local/bin/discrakt
-LABEL org.opencontainers.image.source="https://github.com/afonsojramos/discrakt" \
+LABEL org.opencontainers.image.source="https://github.com/solitonmedic/discrakt-dockerized" \
+    io.discrakt.upstream.source="https://github.com/afonsojramos/discrakt" \
     io.discrakt.upstream.revision="87c66612a6eaf7438b0b9b479e623bdded0a85da" \
     org.opencontainers.image.description="Discrakt headless Docker sidecar; see included README for fork changes" \
     org.opencontainers.image.licenses="MIT"
