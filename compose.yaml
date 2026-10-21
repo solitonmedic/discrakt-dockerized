@@ -1,0 +1,42 @@
+name: discrakt-docker
+
+services:
+  discrakt:
+    image: ${DISCRAKT_IMAGE:-discrakt-sidecar:local}
+    build:
+      context: .
+      args:
+        DISCRAKT_VERSION: ${DISCRAKT_VERSION:-docker-sidecar}
+        DISCRAKT_UID: ${DISCRAKT_UID:-1000}
+        DISCRAKT_GID: ${DISCRAKT_GID:-1000}
+    init: true
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 64
+    environment:
+      DISCRAKT_HEADLESS: "1"
+      DISCRAKT_SETUP_ADDR: "0.0.0.0:8080"
+      XDG_RUNTIME_DIR: /discord-ipc
+      RUST_LOG: ${DISCRAKT_LOG_LEVEL:-info}
+    ports:
+      - "${DISCRAKT_BIND_ADDRESS:-127.0.0.1}:${DISCRAKT_SETUP_PORT:-18081}:8080"
+    volumes:
+      - config:/config
+      - discord-ipc:/discord-ipc:ro
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m,mode=1777
+    logging:
+      driver: json-file
+      options:
+        max-size: 2m
+        max-file: "2"
+
+volumes:
+  config:
+  discord-ipc:
+    external: true
+    name: ${DISCORD_IPC_VOLUME:-discord-ipc}

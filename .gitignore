@@ -5,3 +5,23 @@ credentials.ini
 
 # Local SIMKL API test credentials (never commit)
 .simkl-creds.env
+
+# Local container configuration, credentials, and transfer artifacts
+.env
+.env.*
+!.env.example
+credentials.ini.*
+/data/
+/config/
+/releases/
+/DEPLOYMENT.md
+/compose.sidecar.yml
+*.log
+*.bundle
+*.tar
+*.tar.gz
+*.zip
+__pycache__/
+.DS_Store
+._*
+.pnpm-store/

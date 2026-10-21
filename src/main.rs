@@ -141,6 +141,14 @@ fn init_logging() -> Option<tracing_appender::non_blocking::WorkerGuard> {
     // Users can set RUST_LOG=info or RUST_LOG=debug for verbose output
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn"));
 
+    if headless_enabled() {
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(fmt::layer().with_ansi(false))
+            .init();
+        return None;
+    }
+
     // Log to file only (no console output during normal operation)
     // Console output is only used for CLI flags like --help which print and exit before logging
     // This applies to all platforms since tray apps typically run without a terminal attached
@@ -194,6 +202,7 @@ fn print_help() {
 Usage: discrakt [OPTIONS]
 
 Options:
+    --headless           Run without a display or system tray (also DISCRAKT_HEADLESS=1)
     --autostart <VALUE>  Control automatic startup at login
                          VALUES: 1, true, on  = enable
                                  0, false, off = disable
@@ -259,6 +268,7 @@ fn parse_args() {
     // Process first argument only - all current options exit immediately
     if let Some(arg) = args.get(1) {
         match arg.as_str() {
+            "--headless" if args.len() == 2 => {}
             "--help" | "-h" => {
                 print_help();
                 free_console();
@@ -299,6 +309,11 @@ fn parse_args() {
             }
         }
     }
+}
+
+fn headless_enabled() -> bool {
+    env::var("DISCRAKT_HEADLESS").as_deref() == Ok("1")
+        || env::args().any(|arg| arg == "--headless")
 }
 
 struct App {
@@ -536,6 +551,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         discord.close();
         tracing::info!("Polling thread stopped");
     });
+
+    // Containers can run the existing polling worker without sharing a desktop
+    // display or session bus. An init process forwards SIGTERM to this process.
+    if headless_enabled() {
+        tracing::info!("Discrakt is running headless");
+        polling_handle
+            .join()
+            .map_err(|_| "Polling thread panicked")?;
+        return Ok(());
+    }
 
     // Create event loop - must be done on main thread
     let event_loop = EventLoop::new()?;

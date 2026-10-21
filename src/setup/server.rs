@@ -453,8 +453,14 @@ fn find_available_port() -> Option<u16> {
 /// - OAuth authorization fails
 #[allow(clippy::too_many_lines)]
 pub fn run_setup_server() -> Result<SetupResult, Box<dyn std::error::Error>> {
-    let port = find_available_port().ok_or("Failed to find available port")?;
-    let addr: SocketAddr = format!("127.0.0.1:{port}").parse()?;
+    let addr: SocketAddr = match std::env::var("DISCRAKT_SETUP_ADDR") {
+        Ok(addr) => addr.parse()?,
+        Err(std::env::VarError::NotPresent) => {
+            let port = find_available_port().ok_or("Failed to find available port")?;
+            format!("127.0.0.1:{port}").parse()?
+        }
+        Err(error) => return Err(error.into()),
+    };
 
     let server = Server::http(addr).map_err(|e| format!("Failed to start HTTP server: {e}"))?;
 
@@ -477,10 +483,14 @@ pub fn run_setup_server() -> Result<SetupResult, Box<dyn std::error::Error>> {
     let active_jellyfin_code: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
 
     // Open browser to setup page
-    let url = format!("http://127.0.0.1:{port}");
+    let url = format!("http://127.0.0.1:{}", addr.port());
     tracing::info!("Opening browser to {}", url);
 
-    if webbrowser::open(&url).is_err() {
+    let headless = std::env::var("DISCRAKT_HEADLESS").as_deref() == Ok("1")
+        || std::env::args().any(|arg| arg == "--headless");
+    if headless {
+        println!("Discrakt setup is ready; open the forwarded setup port in your browser.");
+    } else if webbrowser::open(&url).is_err() {
         tracing::warn!("Failed to open browser automatically");
         println!("\n========================================");
         println!("  Discrakt Setup");
@@ -544,8 +554,6 @@ pub fn run_setup_server() -> Result<SetupResult, Box<dyn std::error::Error>> {
                         continue;
                     }
                 };
-
-                tracing::debug!("Received form data: {}", body);
 
                 // Parse the JSON body using serde_json
                 let creds: SubmittedCredentials = match serde_json::from_str(&body) {

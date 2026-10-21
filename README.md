@@ -1,237 +1,151 @@
-# Discrakt - Easy to Use Trakt/Plex/Jellyfin Discord Rich Presence
+# Discrakt Docker sidecar
 
-<p align="center"><img src="./assets/discrakt-wordmark.svg" width="450" alt="Discrakt"><p>
+Run [Discrakt](https://github.com/afonsojramos/discrakt) in a separate headless
+container alongside an existing Linux Discord desktop client. It mirrors Trakt,
+Plex, or Jellyfin watch activity to Discord Rich Presence, including artwork
+and estimated playback progress.
 
-<p align="center">
-  <a href="https://github.com/afonsojramos/discrakt/actions/workflows/build.yml"><img src="https://github.com/afonsojramos/discrakt/actions/workflows/build.yml/badge.svg"></a>
-  <a href="https://deps.rs/repo/github/afonsojramos/discrakt"><img src="https://deps.rs/repo/github/afonsojramos/discrakt/status.svg"></a>
-  <a href="https://github.com/afonsojramos/discrakt/"><img src="https://img.shields.io/badge/rustc-1.96-blue.svg"></a>
-  <a href="https://github.com/afonsojramos/discrakt/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-</p>
+This is an unofficial Docker adaptation of Afonso Ramos's MIT-licensed project,
+based on upstream commit `87c66612a6eaf7438b0b9b479e623bdded0a85da`.
+The complete source is included. See [changes](CHANGES.md),
+[upstream documentation](README.upstream.md), and [license](LICENSE).
 
-A simple app that acts as a bridge between [Discord](https://discord.com/) and [Trakt](https://trakt.tv), [Plex](https://www.plex.tv/), or [Jellyfin](https://jellyfin.org/), allowing for the display of the watch status as [Discord's Rich Presence](https://discord.com/rich-presence). Essentially, it's a Trakt/Plex/Jellyfin Discord Rich Presence.
+## Requirements
 
-<p align="center"><img src="./docs/demo/member-list.png" width="260px"><p>
+- Docker Engine on Linux with Docker Compose v2, or a compatible Linux container engine.
+- A running, logged-in **Linux Discord desktop client** with its Rich Presence
+  Unix socket available to the container. A Discord browser tab is insufficient.
+- Access to Trakt, Plex, or Jellyfin, connected through the setup wizard.
 
-<p align="center"><img src="./docs/demo/profile-status.png" width="260px" alt="Profile Status"><p>
+Images can be built for `linux/amd64` and `linux/arm64`. Mac and Windows users
+can build images, but their native Discord application's socket or named pipe
+is not automatically available inside Docker Desktop's Linux VM. Run the
+Discord Linux client in that same Docker environment, or deploy on Linux.
 
-<p align="center"><img src="./docs/demo/tray.png" width="260px" alt="Tray"><p>
+## Quick start: Discord already runs in Docker
 
-**How it works**: Discrakt mirrors what you're watching to Discord as Rich Presence. There are two ways to connect it:
+Use the existing Docker volume that contains the Discord IPC socket. It must
+already be mounted in the Discord container, usually at `/tmp`. Creating an
+empty volume alone does not connect it to Discord.
 
-**1. Via Trakt** — works with any app that scrobbles to Trakt, so your status shows up **wherever and in whatever app you watch** (TV, phone, across the world), as long as one device is running **Discord** and **Discrakt**. Popular apps with Trakt integration:
-
-- **Stremio** — Enable the [Trakt addon](https://www.stremio.com/addons) in Settings → Addons
-- **Plex** — Use the [Plex-Trakt-Scrobbler](https://github.com/trakt/Plex-Trakt-Scrobbler) plugin
-- **Kodi**, **Infuse**, **VLC** and [many more](https://trakt.tv/apps)
-
-**2. Direct Plex or Jellyfin connection** — Discrakt connects straight to your **Plex** or **Jellyfin** server and mirrors your active session, with no Trakt account or external scrobbling needed. You log in during setup (Plex login, or Jellyfin Quick Connect) and Discrakt polls the server for what you're currently playing.
-
-Either way, movie and show artwork plus localized titles are fetched from TMDB.
-
-## Features
-
-- Choose your source: **Trakt** (any app that scrobbles to it), or a direct **Plex** or **Jellyfin** server connection
-  - _Several sources can be active at once for dual setups, whichever one is playing gets shown._
-- 🌐 **Multilingual support** (Automatic system detection & Tray menu selection)
-  - _Localized titles for movies and episodes are fetched via TMDB._
-- Separate Discord Rich Presence apps for Movies and TV Shows
-- Movie posters and show artwork displayed via TMDB
-- Direct link to the title's page on TMDB (IMDB as a fallback)
-- Progress bar showing watch percentage
-- System tray integration with pause/resume functionality
-- Start at login option
-- Browser-based setup wizard (Trakt login, or a direct Plex / Jellyfin connection)
-
-## Setup
-
-1. Run the executable
-2. A setup wizard opens in your browser
-3. Pick your source:
-   - **Trakt**: click **Login with Trakt** and approve in your browser. (Advanced: use a public Trakt profile by username, no login.)
-   - **Plex**: click **Login with Plex** and approve. (Advanced: enter a server URL + token manually.)
-   - **Jellyfin**: enter your server URL and click **Login with Jellyfin**, then enter the shown code in Jellyfin's **Quick Connect**. (Advanced: use an API key.)
-4. Running a dual setup? Click **Add another source** on the success screen and connect the second one. Discrakt then shows whichever source is playing, preferring the one you connected first.
-
-_Note: Discord needs to be running on the same machine as Discrakt._
-
-<details>
-<summary><strong>Advanced: Manual Configuration</strong></summary>
-
-Discrakt creates `credentials.ini` for you during the setup wizard, so this file is **not** included in releases — you don't need to download it. Only follow these steps if you want to use your own Trakt API application:
-
-1. Create an API Application on [Trakt.tv](https://trakt.tv/oauth/applications/new) (with scrobble capabilities and `urn:ietf:wg:oauth:2.0:oob` as the redirect uri)
-2. Create a `credentials.ini` file with your settings
-3. Place it in one of these locations:
-
-| Operating System | Location                                                | Example                                                           |
-| ---------------- | ------------------------------------------------------- | ----------------------------------------------------------------- |
-| Linux            | `$XDG_CONFIG_HOME`/discrakt or `$HOME`/.config/discrakt | /home/alice/.config/discrakt/credentials.ini                      |
-| macOS            | `$HOME`/Library/Application Support/discrakt            | /Users/Alice/Library/Application Support/discrakt/credentials.ini |
-| Windows          | `%APPDATA%`\discrakt                                    | C:\Users\Alice\AppData\Roaming\discrakt\credentials.ini           |
-
-**Using Plex instead of Trakt**: add a `[Plex]` section and select it with `[Discrakt] source = plex`:
-
-```ini
-[Discrakt]
-source = plex
-
-[Plex]
-serverUrl = http://192.168.1.10:32400
-token = your-x-plex-token
-username = your-plex-username
+```sh
+cp .env.example .env
 ```
 
-`username` is optional and only needed to disambiguate which user's session to mirror on a shared server.
+Edit `.env`: set `DISCORD_IPC_VOLUME` to that volume's name, and match
+`DISCRAKT_UID`/`DISCRAKT_GID` to the socket owner. Then run:
 
-**Using Jellyfin**: add a `[Jellyfin]` section and select it with `[Discrakt] source = jellyfin`:
-
-```ini
-[Discrakt]
-source = jellyfin
-
-[Jellyfin]
-serverUrl = http://192.168.1.10:8096
-accessToken = your-jellyfin-api-key
-username = your-jellyfin-username
+```sh
+docker compose config --quiet
+docker compose build
+docker compose up -d --no-build
 ```
 
-`accessToken` can be an API key (Dashboard → API Keys) or a token from Quick Connect. When `source` is omitted, Discrakt prefers Trakt, then Plex, then Jellyfin, based on what's configured.
+Open **http://127.0.0.1:18081/index.html**, select a source, authorize it directly
+with the provider, and finish the wizard. The setup server then closes and
+Discrakt continues polling in the background. The provider credentials persist
+in the project's configuration volume.
 
-**Using several sources at once**: the setup wizard writes this for you via **Add another source**, but `source` also accepts a comma-separated list directly, so a dual setup can show your activity whichever server you stream from:
+The Compose project is named `discrakt-docker`. It manages its own service,
+network, and settings volume. It uses your existing Discord IPC volume without
+managing the Discord container or requiring a custom Discord image.
 
-```ini
-[Discrakt]
-source = plex, jellyfin
+## Alternative: native Discord on the Linux host
 
-[Plex]
-serverUrl = http://192.168.1.10:32400
-token = your-x-plex-token
+Locate the actual socket directory on the Linux host:
 
-[Jellyfin]
-serverUrl = http://192.168.1.10:8096
-accessToken = your-jellyfin-api-key
+```sh
+find /run/user/"$(id -u)" /tmp -maxdepth 2 -type s -name 'discord-ipc-[0-9]' 2>/dev/null
 ```
 
-Sources are polled in the order listed and the first one playing something wins, so if both are streaming at the same time, Plex is shown in the example above. Polling stops at the first hit, meaning later sources are only contacted when the earlier ones are idle.
+Set `DISCORD_IPC_DIR` in `.env` to the **directory** containing the socket, and
+match the UID/GID. Use the standalone host Compose file:
 
-Only list sources you have actually configured: an unreachable or unconfigured server still gets polled (and retried) on every cycle, which delays the sources behind it. Listing `trakt` alongside `plex` or `jellyfin` is usually not what you want either, since those servers typically scrobble to Trakt already.
-
-</details>
-
-## Installation
-
-### macOS
-
-#### Homebrew (recommended)
-
-```bash
-brew tap afonsojramos/discrakt
-brew install discrakt
+```sh
+docker compose -f compose.host.yaml config --quiet
+docker compose -f compose.host.yaml build
+docker compose -f compose.host.yaml up -d --no-build
 ```
 
-Supports both Apple Silicon and Intel Macs.
+Keep using `-f compose.host.yaml` for management commands with this option.
+Do not combine the two Compose files. A directory mount follows a replacement
+socket after Discord restarts; mounting a single socket file can retain an old
+inode. The IPC directory is mounted read-only, including its other contents.
+No Discord home directory, display, session D-Bus, or Docker daemon socket is
+mounted into Discrakt.
 
-#### DMG
+## Remote setup and private VPN access
 
-Download the DMG for your Mac from the latest [release](https://github.com/afonsojramos/discrakt/releases):
+The setup wizard has no authentication of its own. It defaults to loopback.
+For SSH access, forward the setup port from your computer:
 
-- **Apple Silicon (M1 or newer):** `Discrakt_<version>_arm64.dmg`
-- **Intel:** `Discrakt_<version>_x86_64.dmg`
-
-Open the DMG and drag the app to your Applications folder.
-
-### Windows
-
-#### Winget (recommended)
-
-```powershell
-winget install afonsojramos.discrakt
+```sh
+ssh -N -L 127.0.0.1:18081:127.0.0.1:18081 YOUR_LINUX_HOST
 ```
 
-#### Scoop
+Then open http://127.0.0.1:18081/index.html locally. For direct private VPN
+access, set `DISCRAKT_BIND_ADDRESS` to the Linux host's own VPN interface
+address before starting Compose. Keep this endpoint off public interfaces.
 
-```powershell
-scoop bucket add extras
-scoop install discrakt
+If you change the bind address or setup port, apply it with `docker compose up
+-d --no-build`. The settings volume is retained.
+
+## Build details and checks
+
+The Dockerfile uses a native build stage and cross compilers for the requested
+image architecture. It avoids running the Rust compiler under CPU emulation.
+Examples using Docker Buildx:
+
+```sh
+docker buildx build --platform linux/amd64 --load -t discrakt-sidecar:amd64 .
+docker buildx build --platform linux/arm64 --load -t discrakt-sidecar:arm64 .
 ```
 
-#### MSI Installer
+Podman can also build with `podman build --platform linux/amd64 ...`. Cross
+builds need target-platform emulation for the runtime verification stage;
+Docker Desktop normally supplies it. Native builds need no emulation.
 
-Download the MSI installer from the latest [release](https://github.com/afonsojramos/discrakt/releases).
+Every complete image build checks resolved React/React DOM versions, builds the
+frontend, checks Rust formatting, runs the upstream library/integration tests,
+and exercises the real target binary against local HTTP and Discord IPC mocks.
+Tests use dummy source configuration and never contact your real Discord or
+media accounts. Build and test tools stay outside the final image.
 
-### Linux
+The runtime uses an unprivileged user, a read-only root, dropped capabilities,
+bounded resources/logs, a writable settings volume, and Docker init. Defaults
+are UID/GID 1000; changing those values also requires rebuilding the image.
+Do not change IDs on an existing settings volume without addressing ownership.
 
-#### Debian/Ubuntu (.deb)
+See [validation notes](VALIDATION.md) for the checks completed for this repository.
 
-```bash
-# Download the .deb for your architecture (amd64 or arm64)
-sudo dpkg -i discrakt_*_amd64.deb
+## Management and troubleshooting
+
+```sh
+docker compose ps
+docker compose logs --tail 30
+docker compose restart discrakt
+docker compose down
 ```
 
-#### Fedora/RHEL (.rpm)
+`down` retains the settings volume; `down --volumes` deletes it. Credentials are
+stored at `/config/discrakt/credentials.ini` and should never be committed or
+included in a public issue. `.gitignore` and `.dockerignore` exclude local
+configuration, credential backups, logs, and transfer archives.
 
-```bash
-# Download the .rpm for your architecture (x86_64 or aarch64)
-sudo rpm -i discrakt-*.x86_64.rpm
-```
+- **Cannot connect to Discord:** confirm the client is logged in, the real IPC
+  directory/volume is mounted, and socket permissions allow the configured UID.
+  Sharing a Docker network alone does not share a Unix socket.
+- **Setup port closes after authorization:** expected; it is an initial setup
+  wizard, not a permanent dashboard.
+- **Blank setup page:** React and React DOM are pinned to the same exact version;
+  the build rejects a mismatch. Reload the page after changing images.
+- **Progress changes backward:** the Trakt path calculates estimated progress
+  from watch timestamps. It can reflect timing updates but does not log explicit
+  player seek events.
 
-#### AppImage
+## Sharing this fork
 
-Download the AppImage for your architecture from the latest [release](https://github.com/afonsojramos/discrakt/releases), make it executable, and run:
-
-```bash
-chmod +x Discrakt-*-x86_64.AppImage
-./Discrakt-*-x86_64.AppImage
-```
-
-### Running at Startup
-
-Discrakt includes a "Start at Login" option in its system tray menu. Enable it to automatically start when you log in.
-
-You can also enable autostart from the command line:
-
-```bash
-discrakt --autostart 1
-```
-
-This is useful for scripting or package manager post-install hooks. To disable:
-
-```bash
-discrakt --autostart 0
-```
-
-### Command Line Options
-
-```
-discrakt [OPTIONS]
-
-Options:
-    --autostart <VALUE>  Enable (1) or disable (0) automatic startup at login
-    --version, -V        Show version information
-    --help, -h           Show help message
-```
-
-## Development
-
-Make sure you've installed Rust. You can install Rust and its package manager, `cargo` by following the instructions on [rustup.rs](https://rustup.rs/).
-After installing the requirements below, simply run `cargo run`.
-
-The setup wizard is a React app in [`setup-ui/`](./setup-ui) built with [Vite](https://vite.dev), linted with [oxlint](https://oxc.rs) and formatted with [oxfmt](https://oxc.rs), embedded into the binary at build time. `cargo build` runs the frontend build automatically via `build.rs`, so you also need **Node and nub** installed (managed by [mise](https://mise.jdx.dev): `mise install`). To iterate on the wizard UI directly, run the app once to start its local setup server, then point the dev server at it:
-
-```bash
-cd setup-ui
-VITE_PROXY_TARGET=http://127.0.0.1:<setup-server-port> nub run dev
-nub run lint
-nub run format
-```
-
-The UI components come from [shadcn/ui](https://ui.shadcn.com), whose CLI is deliberately not a dependency; run it on demand with `nubx shadcn@latest add <component>`.
-
-To build the Rust binary against a prebuilt `setup-ui/dist` without invoking nub, set `DISCRAKT_SKIP_UI_BUILD=1`.
-
-## Thank You
-
-`movie` and `tv` icons by [iconixar](https://www.flaticon.com/authors/iconixar)
-
-This product uses the TMDB API but is not endorsed or certified by [TMDB](https://www.themoviedb.org/).
+The branch contains the upstream source and the Docker changes. Configure your
+own Git hosting remote when publishing it; the `upstream` remote points to the
+original project. A source ZIP needs no Git installation. A Git bundle preserves
+the commit history and can be cloned with `git clone PATH_TO_BUNDLE`.
