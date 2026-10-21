@@ -1,11 +1,12 @@
-# Discrakt Docker sidecar
+# Discrakt for Docker
 
-Run [Discrakt](https://github.com/afonsojramos/discrakt) in its own container,
-without a display or system tray. It sends your Trakt, Plex, or Jellyfin watch
-activity to Discord Rich Presence, with artwork and estimated playback progress.
+Run [Discrakt](https://github.com/afonsojramos/discrakt) in Docker without a
+display or system tray. It sends your Trakt, Plex, or Jellyfin watch activity
+to Discord Rich Presence, with artwork and estimated playback progress.
 
-Discrakt connects to your Linux Discord desktop client through its IPC socket.
-You can keep using your existing Discord image.
+Discrakt connects through the Discord desktop client's local IPC socket. The
+client can run directly on Linux or in another container. The examples below
+cover both arrangements; choose the one that matches where your socket lives.
 
 This is an unofficial Docker adaptation of Afonso Ramos's MIT-licensed project.
 It includes the full source, based on upstream commit
@@ -16,52 +17,42 @@ documentation, and [LICENSE](LICENSE) for the license.
 ## Requirements
 
 - Docker Engine on Linux with Docker Compose v2, or a compatible Linux container engine.
-- A running Linux Discord desktop client, logged in, with its IPC socket
-  available to the Discrakt container. The browser version of Discord won't work.
+- A logged-in Linux Discord desktop client whose IPC socket the container can
+  access. The browser version of Discord doesn't provide that socket.
 - A Trakt, Plex, or Jellyfin account to connect through the setup wizard.
 
-You can build images for `linux/amd64` and `linux/arm64`, including from macOS or
-Windows. Docker Desktop runs containers in a Linux VM, so it can't automatically
-use your Mac Discord socket or Windows named pipe. Run the Linux Discord client
-in the same Docker environment, or deploy both on Linux.
+Images support `linux/amd64` and `linux/arm64`. You can build them from macOS or
+Windows, but Docker Desktop's Linux VM can't automatically use your native Mac
+Discord socket or Windows named pipe. These examples require a Linux Discord
+client and access to its socket from the container.
 
-## Quick start: Discord already runs in Docker
+## Set up the container
 
-Find the Docker volume that holds Discord's IPC socket. Discord must already
-have that volume mounted, usually at `/tmp`. An empty volume won't connect the
-two containers.
+Copy the example settings, then choose a socket mount:
 
 ```sh
 cp .env.example .env
 ```
 
-In `.env`, set `DISCORD_IPC_VOLUME` to the volume's name. Set `DISCRAKT_UID` and
-`DISCRAKT_GID` to the socket owner's user and group IDs. Then run:
+| Where the socket is | Compose file | Setting in `.env` |
+| --- | --- | --- |
+| A directory on the Linux host | `compose.host.yaml` | `DISCORD_IPC_DIR` |
+| A Docker volume shared with Discord | `compose.yaml` | `DISCORD_IPC_VOLUME` |
 
-```sh
-docker compose config --quiet
-docker compose build
-docker compose up -d --no-build
-```
+Both files run the same Discrakt image. Each is a complete example; use one at
+a time. Set `DISCRAKT_UID` and `DISCRAKT_GID` to the socket owner's user and group
+IDs. The defaults are examples, so check them against your own installation.
 
-Open http://127.0.0.1:18081/index.html, choose your source, authorize it with the
-provider, and finish the wizard. The setup server closes when you're done.
-Discrakt keeps checking for watch activity in the background and saves your
-credentials in its settings volume.
+### Discord installed on the Linux host
 
-The Compose project is named `discrakt-docker`. It creates its own service,
-network, and settings volume, and mounts the existing Discord IPC volume.
-
-## Alternative: native Discord on the Linux host
-
-Find the socket on the Linux host:
+Start Discord and find its socket:
 
 ```sh
 find /run/user/"$(id -u)" /tmp -maxdepth 2 -type s -name 'discord-ipc-[0-9]' 2>/dev/null
 ```
 
-Set `DISCORD_IPC_DIR` in `.env` to the directory containing the socket. Match
-`DISCRAKT_UID` and `DISCRAKT_GID` to its owner, then use `compose.host.yaml`:
+Set `DISCORD_IPC_DIR` to the directory containing the socket. The sample path
+`/run/user/1000` may differ on your machine. Then run:
 
 ```sh
 docker compose -f compose.host.yaml config --quiet
@@ -69,18 +60,47 @@ docker compose -f compose.host.yaml build
 docker compose -f compose.host.yaml up -d --no-build
 ```
 
-Keep `-f compose.host.yaml` in subsequent management commands. Use this file on
-its own; don't combine it with `compose.yaml`.
+Keep `-f compose.host.yaml` in subsequent commands for this setup.
 
 Mount the directory so Discrakt can find the replacement socket when Discord
 restarts. Mounting the socket file itself can leave it pointing to the old
 socket. The directory is mounted read-only, but Discrakt can read its other
-contents too. The Compose files share only the IPC directory with the Discord client.
+contents too.
 
-## Remote setup and private VPN access
+### Discord running in another container
+
+Use this example if Discord writes its IPC socket into a Docker volume.
+Set `DISCORD_IPC_VOLUME` to that volume's name, then run:
+
+```sh
+docker compose -f compose.yaml config --quiet
+docker compose -f compose.yaml build
+docker compose -f compose.yaml up -d --no-build
+```
+
+The volume must contain Discord's socket. Creating an empty volume or putting
+both containers on the same Docker network won't connect them. Check your
+Discord container's mounts to find the volume and the socket owner's IDs.
+
+The Discrakt Compose project is named `discrakt-docker`. It creates its own
+service, network, and settings volume, and mounts the IPC volume you specify.
+No particular Discord image or volume name is required.
+
+## Connect a watch source
+
+Open http://127.0.0.1:18081/index.html on the Docker host. Choose your source,
+authorize it with the provider, and finish the wizard. The setup server closes
+when you're done. Discrakt keeps checking for watch activity in the background
+and saves your credentials in its settings volume.
+
+If Docker runs on another machine, use SSH forwarding or a private VPN to reach
+the setup page.
+
+### SSH forwarding
 
 The setup wizard has no login of its own. Compose binds its port to
-`127.0.0.1` by default. To reach it over SSH, run this on your computer:
+`127.0.0.1` by default. Run this on your computer, replacing `YOUR_LINUX_HOST`
+with the host running Discrakt:
 
 ```sh
 ssh -N -L 127.0.0.1:18081:127.0.0.1:18081 YOUR_LINUX_HOST
@@ -88,15 +108,17 @@ ssh -N -L 127.0.0.1:18081:127.0.0.1:18081 YOUR_LINUX_HOST
 
 Then open http://127.0.0.1:18081/index.html on that computer.
 
+### Private VPN access
+
 For direct access through a private VPN, set `DISCRAKT_BIND_ADDRESS` to the
-Linux host's VPN interface address before starting Compose. Open
+Docker host's VPN interface address before starting Compose. Open
 `http://VPN_ADDRESS:18081/index.html` while connected to the VPN. Keep the setup
 port off public interfaces.
 
-After changing the bind address or setup port, run
-`docker compose up -d --no-build` to apply it. This keeps your settings volume.
+After changing the bind address or setup port, rerun the `up -d --no-build`
+command for your chosen Compose file. This keeps your settings volume.
 
-## Build details and checks
+## Build details
 
 The Dockerfile compiles Rust on the builder's native CPU and uses a cross
 compiler when the image targets another architecture. With Docker Buildx:
@@ -126,11 +148,14 @@ See [VALIDATION.md](VALIDATION.md) for the completed checks and their limits.
 
 ## Management and troubleshooting
 
+These commands use the host-directory example. For the shared-volume example,
+replace `compose.host.yaml` with `compose.yaml`:
+
 ```sh
-docker compose ps
-docker compose logs --tail 30
-docker compose restart discrakt
-docker compose down
+docker compose -f compose.host.yaml ps
+docker compose -f compose.host.yaml logs --tail 30
+docker compose -f compose.host.yaml restart discrakt
+docker compose -f compose.host.yaml down
 ```
 
 `down` keeps the settings volume. `down --volumes` deletes it, including your
@@ -138,9 +163,9 @@ saved credentials. Credentials live at `/config/discrakt/credentials.ini`.
 Keep that file out of commits and public issues. The ignore files exclude local
 settings, credential backups, logs, and transfer archives.
 
-- Cannot connect to Discord: check that Discord is logged in, the IPC directory
-  or volume contains its socket, and the configured UID has permission to use it.
-  Putting both containers on the same Docker network won't share the socket.
+- Cannot connect to Discord: check that Discord is logged in, the mounted
+  directory or volume contains its socket, and the configured UID has permission
+  to use it.
 - Setup port closes after authorization: this is expected. Discrakt closes the
   server after you finish setup.
 - Blank setup page: React and React DOM are pinned to the same version, and the
