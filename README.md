@@ -93,31 +93,6 @@ authorize it with the provider, and finish the wizard. The setup server closes
 when you're done. Discrakt keeps checking for watch activity in the background
 and saves your credentials in its settings volume.
 
-If Docker runs on another machine, use SSH forwarding or a private VPN to reach
-the setup page.
-
-### SSH forwarding
-
-The setup wizard has no login of its own. Compose binds its port to
-`127.0.0.1` by default. Run this on your computer, replacing `YOUR_LINUX_HOST`
-with the host running Discrakt:
-
-```sh
-ssh -N -L 127.0.0.1:18081:127.0.0.1:18081 YOUR_LINUX_HOST
-```
-
-Then open http://127.0.0.1:18081/index.html on that computer.
-
-### Private VPN access
-
-For direct access through a private VPN, set `DISCRAKT_BIND_ADDRESS` to the
-Docker host's VPN interface address before starting Compose. Open
-`http://VPN_ADDRESS:18081/index.html` while connected to the VPN. Keep the setup
-port off public interfaces.
-
-After changing the bind address or setup port, rerun the `up -d --no-build`
-command for your chosen Compose file. This keeps your settings volume.
-
 ## Build details
 
 The Dockerfile compiles Rust on the builder's native CPU and uses a cross
